@@ -12,6 +12,9 @@ create table if not exists public.athlete_stats (
   updated_at timestamptz not null default now()
 );
 
+-- Works whether or not "Automatically expose new tables" was ticked when the project was created.
+grant usage on schema public to anon, authenticated;
+
 -- 2) Anyone may read. Nobody may write directly — only through the function below.
 alter table public.athlete_stats enable row level security;
 drop policy if exists "public read" on public.athlete_stats;
