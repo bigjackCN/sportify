@@ -5,6 +5,7 @@ import { sportName } from './sports.js'
 import { makeRun, nextQuestion, submit, summary, infoLine, rankKey, displayName, TIME_LIMIT } from './game.js'
 import { Versus, ROUNDS } from './versus.js'
 import { hostRoom, joinRoom, normalizeCode, transportName } from './net.js'
+import * as stats from './stats.js'
 
 // ---------------------------------------------------------------- helpers
 const app = document.getElementById('app')
@@ -49,6 +50,7 @@ function render() {
   if (view === 'soloResult') return renderSoloResult()
   if (view === 'lobby') return renderLobby()
   if (view === 'versusResult') return renderVersusResult()
+  if (view === 'ranking') return renderRanking()
 }
 
 // ---------------------------------------------------------------- home
@@ -82,8 +84,14 @@ function renderHome() {
         <div class="field"><input id="code" class="code" maxlength="6" placeholder="${esc(t('codePlaceholder'))}" value="${esc(pendingCode)}" autocomplete="off"><button class="go blue" data-act="join">${esc(t('joinRoom'))}</button></div>
         <div class="note">${esc(t('netNote'))}</div>
       </div>
+      ${stats.enabled ? `<div class="section-title">${esc(t('board'))}</div>
+      <div class="mode board-card clickable" data-act="ranking">
+        <h3>📊 ${esc(t('boardTitle'))}</h3><p>${esc(t('boardDesc'))}</p>
+        <div class="mf"><span class="mb" id="boardTeaser"></span><button class="go">${esc(t('boardOpen'))} ›</button></div>
+      </div>` : ''}
       <div class="foot">${esc(t('footer'))}</div>
     </div>`
+  if (stats.enabled) stats.loadStats().then(() => teaser())
   const nick = $('#nick')
   nick.addEventListener('change', () => { myName = nick.value.trim().slice(0, 16) || myName; nick.value = myName; put('agq_name', myName) })
   $('#code').addEventListener('keydown', e => { if (e.key === 'Enter') doJoin() })
@@ -129,8 +137,14 @@ function soloNext() {
   clearTimeout(solo.later)
   if (solo.run.over) soloFinish(); else soloLoad()
 }
+function soloRecord() {
+  if (!solo.run || solo.recorded === solo.run) return
+  solo.recorded = solo.run
+  stats.recordAnswers(solo.run.questions.filter(q => q.picked != null).map(q => ({ id: q.answer.id, ok: q.picked === q.answer.id, ms: q.ms })))
+}
 function soloFinish() {
   clearTimeout(solo.later)
+  soloRecord()
   const s = summary(solo.run), mode = solo.run.mode
   solo.newBest = s.score > best[mode]
   if (solo.newBest) { best[mode] = s.score; put('agq_best_' + mode, s.score) }
@@ -229,7 +243,7 @@ function updateGame() {
   if (done) {
     const ok = q.picked === q.answer.id
     const msg = ok ? t('correct') + (speed ? ' +' + q.points : '') : t(q.picked === 'timeout' ? 'timeUp' : 'wrong', { name: nameOf(q.answer) })
-    const info = (lang === 'zh' ? q.answer.en + ' · ' : '') + infoLine(q.answer, SPORTS_EN, lang, t)
+    const info = (lang === 'zh' ? q.answer.en + ' · ' : '') + infoLine(q.answer, SPORTS_EN, lang, t) + globalRate(q.answer.id)
     const auto = ok || (speed && !run.over)
     $('#fb').innerHTML = `<span class="${ok ? 'ok' : 'bad'}">${esc(msg)}</span><span class="sub">${esc(info)}</span>` +
       (auto ? '' : `<button class="big dark" data-act="next">${esc(run.over ? t('finish') : t('next'))}</button>`)
@@ -312,7 +326,14 @@ function onVersusChange(v) {
     return
   }
   if (v.phase === 'lobby') { if (view !== 'lobby') setView('lobby'); else render(); return }
-  if (v.phase === 'over') { if (view !== 'versusResult') setView('versusResult'); else render(); return }
+  if (v.phase === 'over') {
+    if (v._recorded !== v.seed) {
+      v._recorded = v.seed
+      stats.recordAnswers(v.rounds.map(r => { const a = r[v.role]; return { id: r.q.answer.id, ok: !!a && a.id === r.q.answer.id, ms: a ? a.ms : 0 } }))
+    }
+    if (view !== 'versusResult') setView('versusResult'); else render()
+    return
+  }
   // loading / play / reveal
   if (view !== 'versus') setView('versus')
   if (v.i !== lastRound) {
@@ -383,7 +404,7 @@ function updateVersus() {
   if (left) {
     $('#fb').innerHTML = `<span class="bad">${esc(t('opponentLeft'))}</span><button class="big ghost" data-act="back">${esc(t('otherMode'))}</button>`
   } else if (reveal) {
-    const info = (lang === 'zh' ? q.answer.en + ' · ' : '') + infoLine(q.answer, SPORTS_EN, lang, t)
+    const info = (lang === 'zh' ? q.answer.en + ' · ' : '') + infoLine(q.answer, SPORTS_EN, lang, t) + globalRate(q.answer.id)
     const ok = mine === q.answer.id
     $('#fb').innerHTML = `<span class="${ok ? 'ok' : 'bad'}">${esc(ok ? t('correct') + ' +' + r.pts[v.role] : t(mine ? 'wrong' : 'timeUp', { name: nameOf(q.answer) }))}</span><span class="sub">${esc(info)}</span>`
   } else if (v.phase === 'loading') {
@@ -427,6 +448,63 @@ function renderVersusResult() {
     }).join('')}</div>`
 }
 
+// ---------------------------------------------------------------- global recognition board
+let rankKind = 'known'
+let rankState = 'idle' // idle | loading | ok | error
+
+function globalRate(id) {
+  const s = stats.getStat(id)
+  return s && s.seen >= 3 ? ' · ' + t('globalRate', { p: Math.round(s.correct / s.seen * 100), n: s.seen }) : ''
+}
+
+function teaser() {
+  const el = document.getElementById('boardTeaser')
+  if (!el) return
+  const top = stats.ranking(ATHLETES, 'known', 1).rows[0]
+  el.textContent = top ? t('boardTeaser', { name: nameOf(top.a), p: Math.round(top.rate * 100) }) : ''
+}
+
+function openRanking(force) {
+  if (view !== 'ranking') setView('ranking')
+  rankState = 'loading'; render()
+  stats.loadStats(force !== false).then(m => { rankState = m ? 'ok' : 'error'; if (view === 'ranking') render() })
+}
+
+function renderRanking() {
+  app.dataset.view = 'ranking'
+  const tabs = ['known', 'missed', 'fast'].map(k => `<button class="tab ${k === rankKind ? 'on' : ''}" data-act="ranking" data-kind="${k}">${esc(t('rank_' + k))}</button>`).join('')
+  let body = ''
+  if (rankState === 'loading') body = `<div class="empty dots">${esc(t('loadingBoard'))}</div>`
+  else if (rankState === 'error') body = `<div class="empty">${esc(t('boardError'))} <button class="go" data-act="refresh">${esc(t('retry'))}</button></div>`
+  else {
+    const r = stats.ranking(ATHLETES, rankKind, 50)
+    if (!r.rows.length) body = `<div class="empty">${esc(t('boardEmpty'))}</div>`
+    else {
+      body = `<div class="rank-meta">${esc(t('boardMeta', { n: r.totalAnswers, m: r.athletes, k: r.minSeen }))}</div>` +
+        r.rows.map((x, i) => {
+          const pct = Math.round(x.rate * 100)
+          const big = rankKind === 'fast' ? (x.avg / 1000).toFixed(1) + 's' : pct + '%'
+          const sub = rankKind === 'fast' ? t('fastSub', { n: x.correct, p: pct }) : t('rateSub', { n: x.seen, s: x.avg ? (x.avg / 1000).toFixed(1) : '–' })
+          const bar = rankKind === 'fast' ? Math.max(4, 100 - x.avg / 50) : pct
+          return `<div class="rrow">
+            <div class="rk ${i < 3 ? 'top' : ''}">${i + 1}</div>
+            <div class="rth">${imgTag(x.a.id)}</div>
+            <div class="rmain"><div class="rn">${esc(nameOf(x.a))}</div><div class="rs">${esc(sportsOf(x.a))}</div>
+              <div class="rbar"><span style="width:${bar}%;background:${rankKind === 'missed' ? 'var(--bad)' : rankKind === 'fast' ? 'var(--gold)' : 'var(--ok)'}"></span></div></div>
+            <div class="rv"><b>${esc(big)}</b><small>${esc(sub)}</small></div>
+          </div>`
+        }).join('')
+    }
+  }
+  app.innerHTML = `${nav(t('boardTitle'))}
+    <div class="ranking">
+      <div class="tabs">${tabs}</div>
+      <div class="rhint">${esc(t('rankHint_' + rankKind))}</div>
+      ${body}
+      <button class="big ghost" data-act="refresh">${esc(t('refresh'))}</button>
+    </div>`
+}
+
 // ---------------------------------------------------------------- events
 app.addEventListener('click', e => {
   const el = e.target.closest('[data-act]')
@@ -435,10 +513,13 @@ app.addEventListener('click', e => {
   if (act === 'lang') { lang = lang === 'zh' ? 'en' : 'zh'; put('agq_lang', lang); app.dataset.view = ''; render(); return }
   if (act === 'back') {
     if (view === 'lobby' || view === 'versus' || view === 'versusResult') return leaveVersus()
+    if (view === 'solo') soloRecord()
     clearTimeout(solo.later); solo.phase = 'idle'; return setView('home')
   }
   if (act === 'solo') return startSolo(el.dataset.mode || el.closest('[data-mode]').dataset.mode)
   if (act === 'next') return soloNext()
+  if (act === 'ranking') { rankKind = el.dataset.kind || rankKind; return view === 'ranking' && rankState === 'ok' ? render() : openRanking() }
+  if (act === 'refresh') return openRanking(true)
   if (act === 'pick') {
     if (view === 'solo') return soloAnswer(solo.q.options.find(o => o.id === el.dataset.id))
     if (view === 'versus' && vs) return vs.answer(el.dataset.id)
@@ -492,6 +573,7 @@ window.addEventListener('hashchange', routeFromHash)
 
 render()
 routeFromHash()
+stats.loadStats()
 
 // handy for debugging in the console
 window.__agq = { get vs() { return vs }, get solo() { return solo }, transport: transportName() }

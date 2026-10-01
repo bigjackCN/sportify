@@ -19,6 +19,7 @@
 | ⚔️ **Live Versus** | Create a room, share the link, and both players see the same photo at the same moment. 10 rounds, speed-based scoring, rematch button. |
 | ⏱ **5-second clock** | The clock starts only once the photo is actually on screen, so slow networks aren't penalised. |
 | 🌏 **中文 / English** | Follows the browser language and can be switched any time. In a match, each player can use their own language. |
+| 📊 **Recognition board** | A global leaderboard of *athletes*: who players worldwide recognise most, who gets missed most, who is spotted fastest. After each answer you also see “recognised by 87% of players”. Optional — needs a free Supabase project. |
 | ⌨️ **Keyboard** | Press `1`–`4` to answer and `Enter` for the next question. |
 
 ## How the live versus works
@@ -80,6 +81,21 @@ npm test
 
 You can share that link directly; invite links work the same way.
 
+## Global recognition board (optional, free)
+
+The board stores one row per athlete (`seen`, `correct`, `total_ms`) in a free [Supabase](https://supabase.com) Postgres database. The browser talks to Supabase's REST API directly — no server code.
+
+1. Sign up at supabase.com → **New project** (free plan, any region; pick one close to your players).
+2. In the project, open **SQL Editor → New query**, paste the contents of [`supabase/setup.sql`](supabase/setup.sql) and click **Run**.
+3. Open **Project Settings → API Keys** (or **Connect**) and copy the **Project URL** and the **publishable** key (`sb_publishable_…`; older projects call it the `anon` key).
+4. Put both into [`js/config.js`](js/config.js), commit and push. The 📊 card appears on the home page.
+
+Security model: the key in `config.js` is meant to be public. Row-level security lets anyone **read** the table but nobody can write to it directly; the only write path is the `record_answers()` function, which accepts at most 30 answers per call, validates ids and clamps times. It's a fan game, so there's no anti-cheat beyond that.
+
+Notes: free Supabase projects are paused after about a week without any traffic — if the board stops loading, open the Supabase dashboard and click **Restore**. Leave `config.js` empty and the game simply runs without the board.
+
+To test locally without Supabase, `npm test` includes `test/stats.test.mjs` (ranking maths, batching, clamping).
+
 ## Project structure
 
 ```
@@ -90,9 +106,12 @@ js/
   game.js           modes, question & decoy generation, scoring — pure logic
   versus.js         live match protocol — transport/UI independent
   net.js            PeerJS (WebRTC) + BroadcastChannel transports
+  stats.js          global recognition board (Supabase REST)
+  config.js         Supabase URL + publishable key (optional)
   athletes.js       generated data: 800 athletes
   messages.js       zh / en strings
   sports.js         sport names zh / en
+supabase/setup.sql  one-time database setup for the board
 tools/              data pipeline (Node)
 test/               Node tests
 ```
