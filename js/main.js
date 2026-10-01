@@ -43,7 +43,7 @@ function setView(v) { view = v; app.dataset.view = ''; render() }
 
 function render() {
   document.documentElement.lang = lang === 'zh' ? 'zh-CN' : 'en'
-  document.title = t('appTitle') + (lang === 'zh' ? ' · Guess the Athlete' : '')
+  document.title = t('appTitle') + ' · ' + t('tagline')
   if (view === 'home') return renderHome()
   if (view === 'solo' || view === 'versus') return renderGame()
   if (view === 'soloResult') return renderSoloResult()
@@ -60,6 +60,7 @@ function renderHome() {
     <div class="hero">
       <div class="ed">${esc(t('edition'))}</div>
       <h1>${esc(t('appTitle'))}</h1>
+      <div class="tag">${esc(t('tagline'))}</div>
       <p>${esc(t('subtitle'))}</p>
       <div class="rule">⏱ ${esc(t('rule'))}</div>
     </div>

@@ -1,4 +1,6 @@
-# 亚运猜猜看 · Guess the Athlete
+# Sportify
+
+**亚运猜猜看 · Guess the Athlete** — ▶️ **Play: https://bigjackcn.github.io/sportify/**
 
 **Who's in the photo?** A fast quiz game built on Team China's 800 athletes at the 20th Asian Games (Aichi–Nagoya 2026). Play solo, or challenge a friend to a **live head-to-head match over a direct peer-to-peer connection** — no game server, no database, no build step.
 

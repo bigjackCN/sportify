@@ -1,7 +1,8 @@
 // UI strings. Chinese is the default; English is used when the browser language is not Chinese.
 export const MESSAGES = {
   zh: {
-    appTitle: '亚运猜猜看',
+    appTitle: 'Sportify',
+    tagline: '亚运猜猜看',
     subtitle: '看照片，猜猜他/她是谁？',
     edition: '第20届亚运会 · 中国代表团',
     rule: '每题 5 秒',
@@ -82,7 +83,8 @@ export const MESSAGES = {
     host: '房主'
   },
   en: {
-    appTitle: 'Guess the Athlete',
+    appTitle: 'Sportify',
+    tagline: 'Guess the Athlete',
     subtitle: 'Who is in the photo?',
     edition: '20th Asian Games · Team China',
     rule: '5 seconds per question',

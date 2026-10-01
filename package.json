@@ -1,5 +1,5 @@
 {
-  "name": "guess-the-athlete",
+  "name": "sportify",
   "private": true,
   "type": "module",
   "description": "Guess the Asian Games 2026 athlete from a photo — solo modes and live P2P versus. Zero-build static site.",
