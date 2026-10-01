@@ -1,0 +1,11 @@
+{
+  "name": "guess-the-athlete",
+  "private": true,
+  "type": "module",
+  "description": "Guess the Asian Games 2026 athlete from a photo — solo modes and live P2P versus. Zero-build static site.",
+  "scripts": {
+    "start": "npx serve . -l 5173",
+    "test": "node test/game.test.mjs && node test/versus.test.mjs"
+  },
+  "license": "MIT"
+}

@@ -1,0 +1,15 @@
+{
+  "name": "ag-quiz-tools",
+  "private": true,
+  "type": "module",
+  "description": "Data pipeline: fetch Team China roster from the official results API, match Chinese names, optionally download photos",
+  "scripts": {
+    "fetch": "node fetch-data.mjs",
+    "fetch:photos": "node fetch-data.mjs --photos",
+    "apply": "node apply-overrides.mjs"
+  },
+  "dependencies": {
+    "pinyin-pro": "^3.26.0",
+    "sharp": "^0.34.0"
+  }
+}
